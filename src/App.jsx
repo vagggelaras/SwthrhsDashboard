@@ -2,10 +2,11 @@ import { useState } from 'react'
 import Tabs from './components/Tabs'
 import ProvidersTab from './components/ProvidersTab'
 import PlansTab from './components/PlansTab'
+import PlansByCategoryTab from './components/PlansByCategoryTab'
 import SettingsTab from './components/SettingsTab'
 import './App.css'
 
-const tabs = ['Providers', 'Plans', 'Settings']
+const tabs = ['Providers', 'Plans', 'Ανά Κατηγορία', 'Settings']
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('Providers')
@@ -20,6 +21,7 @@ export default function App() {
       <main className="admin-main">
         {activeTab === 'Providers' && <ProvidersTab />}
         {activeTab === 'Plans' && <PlansTab />}
+        {activeTab === 'Ανά Κατηγορία' && <PlansByCategoryTab />}
         {activeTab === 'Settings' && <SettingsTab />}
       </main>
     </div>
