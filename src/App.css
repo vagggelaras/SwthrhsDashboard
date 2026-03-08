@@ -1,0 +1,117 @@
+.admin-app {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.admin-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.admin-subtitle {
+  font-size: 0.875rem;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.admin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.admin-user {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.admin-user i {
+  color: var(--accent);
+  font-size: 1rem;
+}
+
+.admin-logout {
+  background: none;
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s;
+}
+
+.admin-logout:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.admin-role-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  margin-left: 0.25rem;
+}
+
+.admin-main {
+  margin-top: 1.5rem;
+}
+
+.no-access {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  text-align: center;
+  gap: 0.75rem;
+  color: var(--text-muted);
+}
+
+.no-access i {
+  font-size: 3rem;
+  opacity: 0.4;
+}
+
+.no-access h2 {
+  font-size: 1.2rem;
+  color: var(--text-primary);
+}
+
+.no-access p {
+  font-size: 0.88rem;
+  max-width: 320px;
+}
+
+.no-access .admin-logout {
+  margin-top: 1rem;
+}
