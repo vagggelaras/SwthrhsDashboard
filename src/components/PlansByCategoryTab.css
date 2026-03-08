@@ -12,7 +12,7 @@
   border: 1px solid var(--border-default);
   border-radius: 12px;
   background: var(--bg-surface);
-  overflow: visible;
+  overflow: hidden;
 }
 
 .category-header {
@@ -24,7 +24,6 @@
   background: var(--overlay-medium);
   border: none;
   border-bottom: 1px solid var(--border-default);
-  border-radius: 12px 12px 0 0;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -35,7 +34,6 @@
 
 .category-header.collapsed {
   border-bottom: none;
-  border-radius: 12px;
 }
 
 .category-title {
@@ -151,7 +149,7 @@
 
 /* Truncate first column (Provider) */
 .truncate-cell {
-  max-width: 110px;
+  max-width: 150px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -190,53 +188,23 @@
   right: 1rem;
   top: 6rem;
   width: 220px;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+  padding: 1rem;
   border: 1px solid var(--border-default);
   border-radius: 12px;
   background: var(--bg-surface);
   box-shadow: 0 4px 20px var(--shadow-color);
   z-index: 50;
-  overflow: hidden;
 }
 
-.info-panel.open {
-  max-height: calc(100vh - 7rem);
-  overflow-y: auto;
-}
-
-.info-panel-toggle {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: 100%;
-  padding: 0.7rem 1rem;
-  background: none;
-  border: none;
-  font-family: inherit;
+.info-panel h3 {
   font-size: 0.9rem;
   font-weight: 700;
   color: var(--text-primary);
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.info-panel-toggle:hover {
-  background: var(--overlay-medium);
-}
-
-.info-chevron {
-  display: inline-block;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  transition: transform 0.2s;
-}
-
-.info-chevron.collapsed {
-  transform: rotate(-90deg);
-}
-
-.info-panel-body {
-  padding: 0 1rem 1rem;
-  border-top: 1px solid var(--border-default);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .info-section {
@@ -274,110 +242,26 @@
   color: var(--text-muted);
 }
 
-/* Compact cells for category tables */
-.category-section thead th {
-  padding: 0.5rem 0.4rem;
-  font-size: 0.7rem;
-}
-
-.category-section tbody td {
-  padding: 0.4rem 0.4rem;
+/* Compact inline inputs for category tables */
+.category-section .inline-input {
+  width: auto;
+  min-width: 60px;
+  max-width: 100px;
+  padding: 0.2rem 0.4rem;
   font-size: 0.8rem;
 }
 
-.category-section .actions {
+.category-section select.inline-input {
+  max-width: 130px;
+}
+
+.category-section .price-edit-cell {
   gap: 0.25rem;
 }
 
-.category-section .btn-edit,
-.category-section .btn-delete {
-  padding: 0.2rem 0.5rem;
-  font-size: 0.7rem;
-}
-
-/* Modal edit plan */
-.modal-edit-plan {
-  max-width: 700px;
-  max-height: calc(100vh - 4rem);
-  overflow-y: auto;
-}
-
-.modal-info-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
-  color: var(--text-primary);
-}
-
-.modal-info-label {
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.form-row-3 {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
-}
-
-.form-row-3 label {
-  margin-bottom: 1rem;
-}
-
-.modal-edit-plan .formula-section {
-  margin-bottom: 1rem;
-}
-
-/* Reset modal generic input/select rules inside formula-builder and tier-editor */
-.modal-edit-plan .formula-builder input,
-.modal-edit-plan .formula-builder select {
-  display: inline-block;
-  width: auto;
-  margin-top: 0;
-}
-
-.modal-edit-plan .tier-editor input {
-  display: inline-block;
-  width: auto;
-  margin-top: 0;
-}
-
-.modal-edit-plan .price-edit-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.mode-toggle-group {
-  display: flex;
-  gap: 0.2rem;
-}
-
-.auto-price-preview {
-  margin-top: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.auto-price-hint {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 400;
-  color: var(--text-muted);
-  margin-top: 0.15rem;
-  font-style: italic;
-}
-
-.modal-edit-plan .checkbox-label {
-  margin-top: 1.5rem;
+.category-section .price-edit-cell .inline-input {
+  min-width: 50px;
+  max-width: 80px;
 }
 
 /* Ensure full table visibility */
