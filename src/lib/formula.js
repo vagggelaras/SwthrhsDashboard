@@ -40,6 +40,23 @@ export function evaluateFormula(formula, variables = {}) {
   return Math.round(result * 100000) / 100000
 }
 
+export function computeAutoPrice(plan, variables) {
+  const tea = Number(variables.TEA ?? variables.tea ?? 0)
+  const tv = Number(plan.tv ?? 0)
+  const ll = Number(plan.ll ?? 0)
+  const lu = Number(plan.lu ?? 0)
+  const alpha = Number(plan.alpha ?? 0)
+
+  let md = 0
+  if (tea < ll) {
+    md = alpha * (tea - ll)
+  } else if (tea > lu) {
+    md = alpha * (tea - lu)
+  }
+
+  return Math.round((tv + md) * 100000) / 100000
+}
+
 export function formulaToDisplayParts(formula, variables = {}) {
   if (!formula) return { text: '', result: null }
 

@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { cacheGet, cacheSet, cacheInvalidate } from '../lib/cache'
-import { evaluateFormula } from '../lib/formula'
-import FormulaBuilder from './FormulaBuilder'
+import { computeAutoPrice } from '../lib/formula'
 import './PlansByCategoryTab.css'
 
 function TruncateCell({ children }) {
@@ -41,7 +40,7 @@ const TARIFF_TYPES = [
 
 const emptyTier = { min_kwh: '', max_kwh: '', price_per_kwh: '' }
 
-function TierEditor({ tiers, onChange, variables }) {
+function TierEditor({ tiers, onChange }) {
   function updateTier(i, field, value) {
     const updated = tiers.map((t, idx) =>
       idx === i ? { ...t, [field]: value } : t
@@ -50,24 +49,11 @@ function TierEditor({ tiers, onChange, variables }) {
   }
 
   function addTier() {
-    onChange([...tiers, { ...emptyTier, price_mode: 'static', formula: null }])
+    onChange([...tiers, { ...emptyTier }])
   }
 
   function removeTier(i) {
     onChange(tiers.filter((_, idx) => idx !== i))
-  }
-
-  function toggleTierMode(i) {
-    const tier = tiers[i]
-    const newMode = tier.price_mode === 'formula' ? 'static' : 'formula'
-    const updated = tiers.map((t, idx) =>
-      idx === i ? {
-        ...t,
-        price_mode: newMode,
-        formula: newMode === 'formula' ? (t.formula || { base_type: 'variable', base_value: '', steps: [] }) : t.formula
-      } : t
-    )
-    onChange(updated)
   }
 
   return (
@@ -93,32 +79,15 @@ function TierEditor({ tiers, onChange, variables }) {
               value={tier.max_kwh}
               onChange={e => updateTier(i, 'max_kwh', e.target.value)}
             />
-            {tier.price_mode !== 'formula' && (
-              <input
-                type="number"
-                step="any"
-                placeholder="€/kWh"
-                value={tier.price_per_kwh}
-                onChange={e => updateTier(i, 'price_per_kwh', e.target.value)}
-              />
-            )}
-            <button
-              type="button"
-              className={`btn-mode-toggle${tier.price_mode === 'formula' ? ' active' : ''}`}
-              onClick={() => toggleTierMode(i)}
-              title="Εναλλαγή σταθερή/φόρμουλα"
-            >
-              fx
-            </button>
+            <input
+              type="number"
+              step="any"
+              placeholder="€/kWh"
+              value={tier.price_per_kwh}
+              onChange={e => updateTier(i, 'price_per_kwh', e.target.value)}
+            />
             <button type="button" className="btn-tier-remove" onClick={() => removeTier(i)}>×</button>
           </div>
-          {tier.price_mode === 'formula' && (
-            <FormulaBuilder
-              formula={tier.formula}
-              onChange={f => updateTier(i, 'formula', f)}
-              variables={variables}
-            />
-          )}
         </div>
       ))}
       {tiers.length === 0 && (
@@ -128,17 +97,11 @@ function TierEditor({ tiers, onChange, variables }) {
   )
 }
 
-function formatTiers(tiers, variables) {
+function formatTiers(tiers) {
   if (!tiers || tiers.length === 0) return '—'
   return tiers.map(t => {
     const max = t.max_kwh != null ? t.max_kwh : '∞'
-    let price
-    if (t.formula && t.price_mode === 'formula') {
-      price = evaluateFormula(t.formula, variables)
-    } else {
-      price = t.price_per_kwh
-    }
-    return `${t.min_kwh}–${max}: ${price}€`
+    return `${t.min_kwh}–${max}: ${t.price_per_kwh}€`
   }).join(', ')
 }
 
@@ -147,53 +110,32 @@ function parseTiers(tiers) {
   return tiers.map(t => ({
     min_kwh: t.min_kwh ?? '',
     max_kwh: t.max_kwh ?? '',
-    price_per_kwh: t.price_per_kwh ?? '',
-    price_mode: t.formula ? 'formula' : 'static',
-    formula: t.formula || null
+    price_per_kwh: t.price_per_kwh ?? ''
   }))
 }
 
 function serializeTiers(tiers) {
   return tiers
-    .filter(t => t.price_per_kwh !== '' || t.formula)
-    .map(t => {
-      const tier = {
-        min_kwh: t.min_kwh !== '' ? Number(t.min_kwh) : 0,
-        max_kwh: t.max_kwh !== '' ? Number(t.max_kwh) : null,
-        price_per_kwh: t.price_per_kwh !== '' ? Number(t.price_per_kwh) : null
-      }
-      if (t.price_mode === 'formula' && t.formula) {
-        tier.formula = serializeFormula(t.formula)
-      }
-      return tier
-    })
-}
-
-function serializeFormula(f) {
-  if (!f) return null
-  return {
-    base_type: f.base_type,
-    base_value: f.base_type === 'number' ? Number(f.base_value) || 0 : f.base_value,
-    steps: (f.steps || []).map(s => ({
-      op: s.op,
-      val_type: s.val_type || 'number',
-      val: s.val_type === 'variable' ? s.val : Number(s.val) || 0
+    .filter(t => t.price_per_kwh !== '')
+    .map(t => ({
+      min_kwh: t.min_kwh !== '' ? Number(t.min_kwh) : 0,
+      max_kwh: t.max_kwh !== '' ? Number(t.max_kwh) : null,
+      price_per_kwh: t.price_per_kwh !== '' ? Number(t.price_per_kwh) : null
     }))
-  }
 }
 
 function displayPrice(plan, variables) {
-  if (plan.price_formula) {
-    const computed = evaluateFormula(plan.price_formula, variables)
-    return computed != null ? `${computed} (fx)` : '—'
+  if (plan.price_formula?.base_type === 'auto') {
+    const computed = computeAutoPrice(plan, variables)
+    return computed != null ? `${computed} (ΤΕΑ)` : '—'
   }
   return plan.price_per_kwh != null ? `${plan.price_per_kwh}` : '—'
 }
 
 function displayNightPrice(plan, variables) {
-  if (plan.night_price_formula) {
-    const computed = evaluateFormula(plan.night_price_formula, variables)
-    return computed != null ? `${computed} (fx)` : '—'
+  if (plan.night_price_formula?.base_type === 'auto') {
+    const computed = computeAutoPrice(plan, variables)
+    return computed != null ? `${computed} (ΤΕΑ)` : '—'
   }
   return plan.night_price_per_kwh != null ? `${plan.night_price_per_kwh}` : '—'
 }
@@ -262,7 +204,33 @@ function CategoryTable({ title, plans, providers, variables, editingId, editData
                         <td>{p.plan_name}</td>
                         <td>
                           <div className="price-edit-cell">
-                            {editData.price_mode !== 'formula' && (
+                            {isVariable ? (
+                              <>
+                                {editData.price_mode !== 'auto' && (
+                                  <input
+                                    className="inline-input"
+                                    type="number"
+                                    step="any"
+                                    value={editData.price_per_kwh}
+                                    onChange={e => onSetEditData({ ...editData, price_per_kwh: e.target.value })}
+                                  />
+                                )}
+                                {editData.price_mode === 'auto' && (
+                                  <span className="fx-badge">ΤΕΑ</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className={`btn-mode-toggle${editData.price_mode === 'auto' ? ' active' : ''}`}
+                                  onClick={() => onSetEditData({
+                                    ...editData,
+                                    price_mode: editData.price_mode === 'auto' ? 'static' : 'auto'
+                                  })}
+                                  title="Εναλλαγή σταθερή/αυτόματη ΤΕΑ"
+                                >
+                                  ΤΕΑ
+                                </button>
+                              </>
+                            ) : (
                               <input
                                 className="inline-input"
                                 type="number"
@@ -271,25 +239,37 @@ function CategoryTable({ title, plans, providers, variables, editingId, editData
                                 onChange={e => onSetEditData({ ...editData, price_per_kwh: e.target.value })}
                               />
                             )}
-                            {editData.price_mode === 'formula' && (
-                              <span className="fx-badge">fx</span>
-                            )}
-                            <button
-                              type="button"
-                              className={`btn-mode-toggle${editData.price_mode === 'formula' ? ' active' : ''}`}
-                              onClick={() => onSetEditData({
-                                ...editData,
-                                price_mode: editData.price_mode === 'formula' ? 'static' : 'formula'
-                              })}
-                              title="Εναλλαγή σταθερή/φόρμουλα"
-                            >
-                              fx
-                            </button>
                           </div>
                         </td>
                         <td>
                           <div className="price-edit-cell">
-                            {editData.night_price_mode !== 'formula' && (
+                            {isVariable ? (
+                              <>
+                                {editData.night_price_mode !== 'auto' && (
+                                  <input
+                                    className="inline-input"
+                                    type="number"
+                                    step="any"
+                                    value={editData.night_price_per_kwh}
+                                    onChange={e => onSetEditData({ ...editData, night_price_per_kwh: e.target.value })}
+                                  />
+                                )}
+                                {editData.night_price_mode === 'auto' && (
+                                  <span className="fx-badge">ΤΕΑ</span>
+                                )}
+                                <button
+                                  type="button"
+                                  className={`btn-mode-toggle${editData.night_price_mode === 'auto' ? ' active' : ''}`}
+                                  onClick={() => onSetEditData({
+                                    ...editData,
+                                    night_price_mode: editData.night_price_mode === 'auto' ? 'static' : 'auto'
+                                  })}
+                                  title="Εναλλαγή σταθερή/αυτόματη ΤΕΑ"
+                                >
+                                  ΤΕΑ
+                                </button>
+                              </>
+                            ) : (
                               <input
                                 className="inline-input"
                                 type="number"
@@ -298,89 +278,72 @@ function CategoryTable({ title, plans, providers, variables, editingId, editData
                                 onChange={e => onSetEditData({ ...editData, night_price_per_kwh: e.target.value })}
                               />
                             )}
-                            {editData.night_price_mode === 'formula' && (
-                              <span className="fx-badge">fx</span>
-                            )}
-                            <button
-                              type="button"
-                              className={`btn-mode-toggle${editData.night_price_mode === 'formula' ? ' active' : ''}`}
-                              onClick={() => onSetEditData({
-                                ...editData,
-                                night_price_mode: editData.night_price_mode === 'formula' ? 'static' : 'formula'
-                              })}
-                              title="Εναλλαγή σταθερή/φόρμουλα"
-                            >
-                              fx
-                            </button>
                           </div>
                         </td>
-                        {isVariable && (
-                          <td>
-                            <input
-                              className="inline-input"
-                              type="number"
-                              step="any"
-                              value={editData.ll}
-                              onChange={e => onSetEditData({ ...editData, ll: e.target.value })}
-                            />
-                          </td>
-                        )}
-                        {isVariable && (
-                          <td>
-                            <input
-                              className="inline-input"
-                              type="number"
-                              step="any"
-                              value={editData.lu}
-                              onChange={e => onSetEditData({ ...editData, lu: e.target.value })}
-                            />
-                          </td>
-                        )}
-                        {isVariable && (
-                          <td>
-                            <input
-                              className="inline-input"
-                              type="number"
-                              step="any"
-                              value={editData.tv}
-                              onChange={e => onSetEditData({ ...editData, tv: e.target.value })}
-                            />
-                          </td>
-                        )}
-                        {isVariable && (
-                          <td>
-                            <input
-                              className="inline-input"
-                              type="number"
-                              step="any"
-                              value={editData.af}
-                              onChange={e => onSetEditData({ ...editData, af: e.target.value })}
-                            />
-                          </td>
-                        )}
-                        {isVariable && (
-                          <td>
-                            <input
-                              className="inline-input"
-                              type="number"
-                              step="any"
-                              value={editData.gamma}
-                              onChange={e => onSetEditData({ ...editData, gamma: e.target.value })}
-                            />
-                          </td>
-                        )}
-                        {isVariable && (
-                          <td>
-                            <input
-                              className="inline-input"
-                              type="number"
-                              step="any"
-                              value={editData.alpha}
-                              onChange={e => onSetEditData({ ...editData, alpha: e.target.value })}
-                            />
-                          </td>
-                        )}
-                        <td className="tiers-cell">{formatTiers(editData.pricing_tiers, getVarsForProvider(editData.provider_id))}</td>
+                        {isVariable && (() => {
+                          const teaReq = editData.price_mode === 'auto' || editData.night_price_mode === 'auto'
+                          return (<>
+                            <td>
+                              <input
+                                className={`inline-input${teaReq ? ' tea-required' : ''}`}
+                                type="number"
+                                step="any"
+                                value={editData.ll}
+                                onChange={e => onSetEditData({ ...editData, ll: e.target.value })}
+                                required={teaReq}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className={`inline-input${teaReq ? ' tea-required' : ''}`}
+                                type="number"
+                                step="any"
+                                value={editData.lu}
+                                onChange={e => onSetEditData({ ...editData, lu: e.target.value })}
+                                required={teaReq}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className={`inline-input${teaReq ? ' tea-required' : ''}`}
+                                type="number"
+                                step="any"
+                                value={editData.tv}
+                                onChange={e => onSetEditData({ ...editData, tv: e.target.value })}
+                                required={teaReq}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="inline-input"
+                                type="number"
+                                step="any"
+                                value={editData.af}
+                                onChange={e => onSetEditData({ ...editData, af: e.target.value })}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className="inline-input"
+                                type="number"
+                                step="any"
+                                value={editData.gamma}
+                                onChange={e => onSetEditData({ ...editData, gamma: e.target.value })}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                className={`inline-input${teaReq ? ' tea-required' : ''}`}
+                                type="number"
+                                step="any"
+                                value={editData.alpha}
+                                onChange={e => onSetEditData({ ...editData, alpha: e.target.value })}
+                                required={teaReq}
+                              />
+                            </td>
+                          </>)
+                        })()}
+                        <td className="tiers-cell">{formatTiers(editData.pricing_tiers)}</td>
                         <td>
                           <input
                             className="inline-input"
@@ -414,7 +377,7 @@ function CategoryTable({ title, plans, providers, variables, editingId, editData
                         {isVariable && <td>{p.af != null ? p.af : '—'}</td>}
                         {isVariable && <td>{p.gamma != null ? p.gamma : '—'}</td>}
                         {isVariable && <td>{p.alpha != null ? p.alpha : '—'}</td>}
-                        <td className="tiers-cell">{formatTiers(p.pricing_tiers, getVarsForProvider(p.provider_id))}</td>
+                        <td className="tiers-cell">{formatTiers(p.pricing_tiers)}</td>
                         <td>{p.monthly_fee_eur != null ? `${p.monthly_fee_eur}€` : '—'}</td>
                         <td>{p.social_tariff ? 'Yes' : 'No'}</td>
                         <td className="actions">
@@ -425,41 +388,14 @@ function CategoryTable({ title, plans, providers, variables, editingId, editData
                     )}
                   </tr>
                   {editingId === p.id && (
-                    <>
-                      {editData.price_mode === 'formula' && (
-                        <tr className="tier-edit-row">
-                          <td colSpan={colCount}>
-                            <div className="formula-section-label">Φόρμουλα ημερήσιας τιμής/kWh</div>
-                            <FormulaBuilder
-                              formula={editData.price_formula}
-                              onChange={f => onSetEditData({ ...editData, price_formula: f })}
-                              variables={getVarsForProvider(editData.provider_id)}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                      {editData.night_price_mode === 'formula' && (
-                        <tr className="tier-edit-row">
-                          <td colSpan={colCount}>
-                            <div className="formula-section-label">Φόρμουλα νυχτερινής τιμής/kWh</div>
-                            <FormulaBuilder
-                              formula={editData.night_price_formula}
-                              onChange={f => onSetEditData({ ...editData, night_price_formula: f })}
-                              variables={getVarsForProvider(editData.provider_id)}
-                            />
-                          </td>
-                        </tr>
-                      )}
-                      <tr className="tier-edit-row">
-                        <td colSpan={colCount}>
-                          <TierEditor
-                            tiers={editData.pricing_tiers}
-                            onChange={tiers => onSetEditData({ ...editData, pricing_tiers: tiers })}
-                            variables={getVarsForProvider(editData.provider_id)}
-                          />
-                        </td>
-                      </tr>
-                    </>
+                    <tr className="tier-edit-row">
+                      <td colSpan={colCount}>
+                        <TierEditor
+                          tiers={editData.pricing_tiers}
+                          onChange={tiers => onSetEditData({ ...editData, pricing_tiers: tiers })}
+                        />
+                      </td>
+                    </tr>
                   )}
                 </React.Fragment>
               ))}
@@ -474,7 +410,7 @@ function CategoryTable({ title, plans, providers, variables, editingId, editData
   )
 }
 
-export default function PlansByCategoryTab() {
+export default function PlansByCategoryTab({ serviceType }) {
   const [plans, setPlans] = useState([])
   const [providers, setProviders] = useState([])
   const [variables, setVariables] = useState({})
@@ -483,12 +419,13 @@ export default function PlansByCategoryTab() {
   const [error, setError] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [editData, setEditData] = useState({})
+  const [showInfo, setShowInfo] = useState(false)
 
   useEffect(() => {
     fetchPlans()
     fetchProviders()
     fetchVariables()
-  }, [])
+  }, [serviceType])
 
   async function fetchVariables() {
     const { data } = await supabase.from('settings').select('key, value')
@@ -500,7 +437,8 @@ export default function PlansByCategoryTab() {
   }
 
   async function fetchProviders() {
-    const cached = cacheGet(CACHE_KEY_PROVIDERS)
+    const cacheKey = `${CACHE_KEY_PROVIDERS}_${serviceType}`
+    const cached = cacheGet(cacheKey)
     if (cached) {
       setProviders(cached.map(p => ({ id: p.id, name: p.name, adjustment_factor: p.adjustment_factor })))
       return
@@ -508,35 +446,37 @@ export default function PlansByCategoryTab() {
     const { data } = await supabase
       .from('providers')
       .select('id, name, adjustment_factor')
+      .eq('service_type', serviceType)
       .order('name')
     if (data) setProviders(data)
   }
 
   async function fetchPlans(skipCache = false) {
     setLoading(true)
+    const cacheKey = `${CACHE_KEY_PLANS}_${serviceType}`
     if (!skipCache) {
-      const cached = cacheGet(CACHE_KEY_PLANS)
+      const cached = cacheGet(cacheKey)
       if (cached) { setPlans(cached); setLoading(false); return }
     }
     const { data, error } = await supabase
       .from('plans')
-      .select('*, providers(name)')
+      .select('*, providers!inner(name, service_type)')
+      .eq('providers.service_type', serviceType)
       .order('created_at', { ascending: true })
     if (error) setError(error.message)
-    else { setPlans(data); cacheSet(CACHE_KEY_PLANS, data) }
+    else { setPlans(data); cacheSet(cacheKey, data) }
     setLoading(false)
   }
 
   function startEdit(plan) {
+    const isVar = plan.tariff_type === 'Κυμαινόμενο Τιμολόγιο'
     setEditingId(plan.id)
     setEditData({
       provider_id: plan.provider_id,
       price_per_kwh: plan.price_per_kwh ?? '',
-      price_mode: plan.price_formula ? 'formula' : 'static',
-      price_formula: plan.price_formula || { base_type: 'variable', base_value: '', steps: [] },
+      price_mode: isVar && plan.price_formula?.base_type === 'auto' ? 'auto' : 'static',
       night_price_per_kwh: plan.night_price_per_kwh ?? '',
-      night_price_mode: plan.night_price_formula ? 'formula' : 'static',
-      night_price_formula: plan.night_price_formula || { base_type: 'variable', base_value: '', steps: [] },
+      night_price_mode: isVar && plan.night_price_formula?.base_type === 'auto' ? 'auto' : 'static',
       ll: plan.ll ?? '',
       lu: plan.lu ?? '',
       tv: plan.tv ?? '',
@@ -551,6 +491,18 @@ export default function PlansByCategoryTab() {
 
   async function saveEdit(id) {
     setError(null)
+    const teaActive = editData.price_mode === 'auto' || editData.night_price_mode === 'auto'
+    if (teaActive) {
+      const missing = []
+      if (editData.ll === '') missing.push('Ll')
+      if (editData.lu === '') missing.push('Lu')
+      if (editData.tv === '') missing.push('Τβ')
+      if (editData.alpha === '') missing.push('α')
+      if (missing.length > 0) {
+        setError(`Ο τύπος ΤΕΑ απαιτεί: ${missing.join(', ')}`)
+        return
+      }
+    }
     const updateData = {
       ll: editData.ll !== '' ? Number(editData.ll) : null,
       lu: editData.lu !== '' ? Number(editData.lu) : null,
@@ -559,9 +511,13 @@ export default function PlansByCategoryTab() {
       gamma: editData.gamma !== '' ? Number(editData.gamma) : null,
       alpha: editData.alpha !== '' ? Number(editData.alpha) : null,
       price_per_kwh: editData.price_per_kwh !== '' ? Number(editData.price_per_kwh) : null,
-      price_formula: editData.price_mode === 'formula' ? serializeFormula(editData.price_formula) : null,
+      price_formula: editData.price_mode === 'auto'
+        ? { base_type: 'auto', base_value: '', steps: [] }
+        : null,
       night_price_per_kwh: editData.night_price_per_kwh !== '' ? Number(editData.night_price_per_kwh) : null,
-      night_price_formula: editData.night_price_mode === 'formula' ? serializeFormula(editData.night_price_formula) : null,
+      night_price_formula: editData.night_price_mode === 'auto'
+        ? { base_type: 'auto', base_value: '', steps: [] }
+        : null,
       monthly_fee_eur: editData.monthly_fee_eur !== '' ? Number(editData.monthly_fee_eur) : null,
       social_tariff: editData.social_tariff,
       pricing_tiers: serializeTiers(editData.pricing_tiers)
@@ -627,7 +583,7 @@ export default function PlansByCategoryTab() {
                   onStartEdit={startEdit}
                   onSetEditData={setEditData}
                   onSaveEdit={saveEdit}
-                  onCancelEdit={() => setEditingId(null)}
+                  onCancelEdit={() => { setEditingId(null); setError(null) }}
                   onDelete={handleDelete}
                 />
               ))}
@@ -635,21 +591,43 @@ export default function PlansByCategoryTab() {
           )}
         </div>
 
-        <aside className="info-panel">
-          <h3>Πληροφορίες</h3>
+        <button
+          className={`info-toggle${showInfo ? ' active' : ''}`}
+          onClick={() => setShowInfo(!showInfo)}
+          title="Υπόμνημα"
+        >
+          ?
+        </button>
+        {showInfo && (
+          <aside className="info-panel">
+            <h3>Πληροφορίες</h3>
 
-          <section className="info-section">
-            <h4>Κυμαινόμενο — Στήλες</h4>
-            <dl>
-              <dt>Ll</dt><dd>Κάτω όριο ενεργοποίησης</dd>
-              <dt>Lu</dt><dd>Άνω όριο ενεργοποίησης</dd>
-              <dt>Τβ</dt><dd>Τιμή βάσης</dd>
-              <dt>AF</dt><dd>Adjustment Factor</dd>
-              <dt>γ</dt><dd>Συντελεστής γ</dd>
-              <dt>α</dt><dd>Συντελεστής α</dd>
-            </dl>
-          </section>
-        </aside>
+            <section className="info-section">
+              <h4>Κυμαινόμενο — Στήλες</h4>
+              <dl>
+                <dt>Ll</dt><dd>Κάτω όριο ενεργοποίησης</dd>
+                <dt>Lu</dt><dd>Άνω όριο ενεργοποίησης</dd>
+                <dt>Τβ</dt><dd>Τιμή βάσης</dd>
+                <dt>AF</dt><dd>Adjustment Factor</dd>
+                <dt>γ</dt><dd>Συντελεστής γ</dd>
+                <dt>α</dt><dd>Συντελεστής α</dd>
+              </dl>
+            </section>
+
+            <section className="info-section">
+              <h4>Τύπος ΤΕΑ</h4>
+              <p className="formula-display">Τιμή = Τβ + μδ</p>
+              <dl>
+                <dt>μδ</dt>
+                <dd>
+                  α × (ΤΕΑ − Ll), αν ΤΕΑ &lt; Ll<br />
+                  0, αν Ll ≤ ΤΕΑ ≤ Lu<br />
+                  α × (ΤΕΑ − Lu), αν ΤΕΑ &gt; Lu
+                </dd>
+              </dl>
+            </section>
+          </aside>
+        )}
       </div>
     </div>
   )

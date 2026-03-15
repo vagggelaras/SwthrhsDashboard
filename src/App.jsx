@@ -17,6 +17,7 @@ export default function App() {
   const [staffInfo, setStaffInfo] = useState(null)
   const [staffLoading, setStaffLoading] = useState(true)
   const [activeTab, setActiveTab] = useState(null)
+  const [activeCategory, setActiveCategory] = useState('electricity')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -83,12 +84,28 @@ export default function App() {
 
   return (
     <div className="admin-app">
-      <header className="admin-header">
-        <div className="admin-header-left">
-          <h1>Admin Dashboard</h1>
+      <aside className="admin-sidebar">
+        <div className="sidebar-brand">
+          <h1>Admin</h1>
           <span className="admin-subtitle">EnergyCompare</span>
         </div>
-        <div className="admin-header-right">
+        <nav className="sidebar-nav">
+          <button
+            className={`sidebar-btn ${activeCategory === 'electricity' ? 'active' : ''}`}
+            onClick={() => setActiveCategory('electricity')}
+          >
+            <i className="fa-solid fa-bolt"></i>
+            Ρεύμα
+          </button>
+          <button
+            className={`sidebar-btn ${activeCategory === 'gas' ? 'active' : ''}`}
+            onClick={() => setActiveCategory('gas')}
+          >
+            <i className="fa-solid fa-fire"></i>
+            Αέριο
+          </button>
+        </nav>
+        <div className="sidebar-footer">
           <span className="admin-user">
             <i className="fa-solid fa-user-circle"></i> {displayName}
             {isAdmin && <span className="admin-role-badge">Admin</span>}
@@ -97,16 +114,18 @@ export default function App() {
             <i className="fa-solid fa-right-from-bracket"></i> Αποσύνδεση
           </button>
         </div>
-      </header>
-      <Tabs tabs={allowedTabs} active={currentTab} onChange={setActiveTab} />
-      <main className="admin-main">
-        {currentTab === 'Providers' && <ProvidersTab />}
-        {currentTab === 'Plans' && <PlansTab />}
-        {currentTab === 'Ανά Κατηγορία' && <PlansByCategoryTab />}
-        {currentTab === 'Πελάτες' && <CustomersTab user={user} />}
-        {currentTab === 'Settings' && <SettingsTab />}
-        {currentTab === 'App Settings' && <AppSettingsTab />}
-      </main>
+      </aside>
+      <div className="admin-body">
+        <Tabs tabs={allowedTabs} active={currentTab} onChange={setActiveTab} />
+        <main className="admin-main">
+          {currentTab === 'Providers' && <ProvidersTab serviceType={activeCategory} />}
+          {currentTab === 'Plans' && <PlansTab serviceType={activeCategory} />}
+          {currentTab === 'Ανά Κατηγορία' && <PlansByCategoryTab serviceType={activeCategory} />}
+          {currentTab === 'Πελάτες' && <CustomersTab user={user} />}
+          {currentTab === 'Settings' && <SettingsTab />}
+          {currentTab === 'App Settings' && <AppSettingsTab />}
+        </main>
+      </div>
     </div>
   )
 }

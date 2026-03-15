@@ -19,7 +19,7 @@ const emptyForm = {
   tariff_type: TARIFF_TYPES[0]
 }
 
-export default function PlansTab() {
+export default function PlansTab({ serviceType }) {
   const [plans, setPlans] = useState([])
   const [providers, setProviders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -30,6 +30,9 @@ export default function PlansTab() {
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
 
+  const plansCacheKey = `${CACHE_KEY_PLANS}_${serviceType}`
+  const providersCacheKey = `${CACHE_KEY_PROVIDERS}_${serviceType}`
+
   const filtered = plans.filter(p =>
     p.plan_name.toLowerCase().includes(search.toLowerCase()) ||
     (p.providers?.name ?? '').toLowerCase().includes(search.toLowerCase())
@@ -38,11 +41,11 @@ export default function PlansTab() {
   useEffect(() => {
     fetchPlans()
     fetchProviders()
-  }, [])
+  }, [serviceType])
 
   async function fetchProviders(skipCache = false) {
     if (!skipCache) {
-      const cached = cacheGet(CACHE_KEY_PROVIDERS)
+      const cached = cacheGet(providersCacheKey)
       if (cached) {
         setProviders(cached.map(p => ({ id: p.id, name: p.name })))
         return
@@ -51,6 +54,7 @@ export default function PlansTab() {
     const { data } = await supabase
       .from('providers')
       .select('id, name')
+      .eq('service_type', serviceType)
       .order('name')
     if (data) setProviders(data)
   }
@@ -58,15 +62,16 @@ export default function PlansTab() {
   async function fetchPlans(skipCache = false) {
     setLoading(true)
     if (!skipCache) {
-      const cached = cacheGet(CACHE_KEY_PLANS)
+      const cached = cacheGet(plansCacheKey)
       if (cached) { setPlans(cached); setLoading(false); return }
     }
     const { data, error } = await supabase
       .from('plans')
-      .select('*, providers(name)')
+      .select('*, providers!inner(name, service_type)')
+      .eq('providers.service_type', serviceType)
       .order('created_at', { ascending: true })
     if (error) setError(error.message)
-    else { setPlans(data); cacheSet(CACHE_KEY_PLANS, data) }
+    else { setPlans(data); cacheSet(plansCacheKey, data) }
     setLoading(false)
   }
 
@@ -82,7 +87,7 @@ export default function PlansTab() {
     if (error) { setError(error.message); return }
     setForm(emptyForm)
     setShowModal(false)
-    cacheInvalidate(CACHE_KEY_PLANS)
+    cacheInvalidate(plansCacheKey)
     fetchPlans(true)
   }
 
@@ -107,7 +112,7 @@ export default function PlansTab() {
       .eq('id', id)
     if (error) { setError(error.message); return }
     setEditingId(null)
-    cacheInvalidate(CACHE_KEY_PLANS)
+    cacheInvalidate(plansCacheKey)
     fetchPlans(true)
   }
 
@@ -116,14 +121,16 @@ export default function PlansTab() {
     setError(null)
     const { error } = await supabase.from('plans').delete().eq('id', id)
     if (error) { setError(error.message); return }
-    cacheInvalidate(CACHE_KEY_PLANS)
+    cacheInvalidate(plansCacheKey)
     fetchPlans(true)
   }
+
+  const serviceLabel = serviceType === 'electricity' ? 'Ρεύματος' : 'Αερίου'
 
   return (
     <div className="plans-tab">
       <div className="tab-toolbar">
-        <h2>Plans (Contracts)</h2>
+        <h2>Πακέτα {serviceLabel}</h2>
         <div className="toolbar-right">
           <input
             className="search-input"
@@ -132,7 +139,7 @@ export default function PlansTab() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <button className="btn-primary" onClick={() => setShowModal(true)}>+ Add Contract</button>
+          <button className="btn-primary" onClick={() => setShowModal(true)}>+ Νέο Πακέτο</button>
         </div>
       </div>
 
@@ -221,7 +228,7 @@ export default function PlansTab() {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>Add Contract</h3>
+            <h3>Νέο Πακέτο ({serviceType === 'electricity' ? 'Ρεύμα' : 'Αέριο'})</h3>
             <form onSubmit={handleAdd}>
               <label>
                 Provider
