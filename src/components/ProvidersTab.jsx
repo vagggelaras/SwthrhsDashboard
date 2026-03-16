@@ -52,7 +52,6 @@ export default function ProvidersTab({ serviceType }) {
     const { data, error } = await supabase
       .from('providers')
       .select('*')
-      .eq('service_type', serviceType)
       .order('created_at', { ascending: true })
     if (error) setError(error.message)
     else { setProviders(data); cacheSet(cacheKey, data) }
@@ -66,7 +65,6 @@ export default function ProvidersTab({ serviceType }) {
       name: form.name,
       adjustment_factor: form.adjustment_factor ? Number(form.adjustment_factor) : null,
       logo_url: svgToDataUri(form.logo_svg),
-      service_type: serviceType
     })
     if (error) { setError(error.message); return }
     setForm({ name: '', adjustment_factor: '', logo_svg: '' })
@@ -123,12 +121,12 @@ export default function ProvidersTab({ serviceType }) {
     fetchProviders(true)
   }
 
-  const serviceLabel = serviceType === 'electricity' ? 'Ρεύματος' : 'Αερίου'
+  const serviceLabel = ''
 
   return (
     <div className="providers-tab">
       <div className="tab-toolbar">
-        <h2>Πάροχοι {serviceLabel}</h2>
+        <h2>Πάροχοι</h2>
         <div className="toolbar-right">
           <input
             className="search-input"
@@ -221,7 +219,7 @@ export default function ProvidersTab({ serviceType }) {
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
           <div className="modal modal-wide" onClick={e => e.stopPropagation()}>
-            <h3>Νέος Πάροχος ({serviceType === 'electricity' ? 'Ρεύμα' : 'Αέριο'})</h3>
+            <h3>Νέος Πάροχος</h3>
             <form onSubmit={handleAdd}>
               <label>
                 Όνομα

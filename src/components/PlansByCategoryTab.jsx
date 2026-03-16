@@ -446,7 +446,6 @@ export default function PlansByCategoryTab({ serviceType }) {
     const { data } = await supabase
       .from('providers')
       .select('id, name, adjustment_factor')
-      .eq('service_type', serviceType)
       .order('name')
     if (data) setProviders(data)
   }
@@ -460,8 +459,8 @@ export default function PlansByCategoryTab({ serviceType }) {
     }
     const { data, error } = await supabase
       .from('plans')
-      .select('*, providers!inner(name, service_type)')
-      .eq('providers.service_type', serviceType)
+      .select('*, providers(name)')
+      .eq('service_type', serviceType)
       .order('created_at', { ascending: true })
     if (error) setError(error.message)
     else { setPlans(data); cacheSet(cacheKey, data) }
